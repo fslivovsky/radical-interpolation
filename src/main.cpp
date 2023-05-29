@@ -7,6 +7,10 @@ int main() {
   interpolator.append_formula({ {-2, -3, 1}, {-2, -3, -1}}, true);
   std::vector<int> assumptions = {2, 3};
   auto result = interpolator.solve(assumptions);
+  interpolator.get_interpolant({}, 0);
+  interpolator.append_formula({ {2, 3, 1}, {2, 3, -1}}, true);
+  assumptions = {-2, -3};
+  result = interpolator.solve(assumptions);
   std::cout << result << std::endl;
   interpolator.get_interpolant({}, 0);
   return 0;

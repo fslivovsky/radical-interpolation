@@ -13,11 +13,12 @@ namespace cadical_itp {
 
 class Interpolator {
  public:
+  Interpolator();
   void add_clause(const std::vector<int>& clause, bool first_part);
   void append_formula(const std::vector<std::vector<int>>& formula, bool first_part);
   bool solve(const std::vector<int>& assumptions);
   std::vector<int> get_model();
-  std::vector<std::vector<int>> get_interpolant(const std::vector<int>& shared_variables, int auxiliary_variable_start);
+  std::pair<int, std::vector<std::vector<int>>> get_interpolant(const std::vector<int>& shared_variables, int auxiliary_variable_start);
 
  protected:
   std::vector<int> get_clause(unsigned int id) const;
@@ -26,12 +27,12 @@ class Interpolator {
   void replay_proof(std::vector<unsigned int>& core);
   unsigned int propagate(unsigned int id);
   void analyze_and_interpolate(unsigned int id);
+  void delete_clauses();
 
-  std::vector<std::vector<int>> current_formula;
-  std::vector<bool> is_first_part;
   std::vector<unsigned int> reason;
   std::vector<bool> is_assigned;
   std::vector<bool> variable_seen;
+  std::unordered_map<unsigned int, bool> id_in_first_part;
   std::unordered_map<unsigned int, std::vector<int>> id_to_clause;
   std::unordered_map<unsigned int, std::vector<unsigned int>> id_to_premises;
   std::unordered_set<int> first_part_variables;
@@ -39,11 +40,14 @@ class Interpolator {
   std::vector<int> last_assumptions;
   unsigned int final_id;
   std::vector<int> trail;
+  std::vector<unsigned int> to_delete;
+  unsigned int clause_id;
   Cadical solver;
 
 };
 
 std::tuple<unsigned int, std::vector<int>, std::vector<unsigned int>> read_lrat_line(std::ifstream& input);
+std::vector<unsigned int> read_deletion_line(std::ifstream& input);
 
 inline int get_literal(unsigned int literal_int) {
   int v = literal_int >> 1;
@@ -68,7 +72,8 @@ inline unsigned read_number(std::ifstream& input) {
 }
 
 inline void Interpolator::append_formula(const std::vector<std::vector<int>>& formula, bool first_part) {
-  current_formula.reserve(current_formula.size() + formula.size());
+  id_in_first_part.reserve(id_in_first_part.size() + formula.size());
+  id_to_clause.reserve(id_to_clause.size() + formula.size());
   for (const auto& clause: formula) {
     add_clause(clause, first_part);
   }
@@ -77,14 +82,6 @@ inline void Interpolator::append_formula(const std::vector<std::vector<int>>& fo
 inline bool Interpolator::solve(const std::vector<int>& assumptions) {
   last_assumptions = assumptions;
   return solver.solve(assumptions) != 20;
-}
-
-inline std::vector<int> Interpolator::get_clause(unsigned int id) const {
-  if (id > current_formula.size()) {
-    return id_to_clause.at(id);
-  } else {
-    return current_formula[id - 1];
-  }
 }
 
 inline std::vector<int> Interpolator::get_model() {
