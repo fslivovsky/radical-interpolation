@@ -162,6 +162,7 @@ std::pair<int, std::vector<std::vector<int>>> Interpolator::get_interpolant(cons
   //delete_clauses();
   parse_proof();
   auto core = get_core();
+  //std::cerr << "Core size: " << core.size() << std::endl;
   return std::make_pair(0, std::vector<std::vector<int>>());
 }
 

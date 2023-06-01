@@ -14,6 +14,7 @@ PYBIND11_MODULE(interpolator_module, m) {
         .def("append_formula", &Interpolator::append_formula)
         .def("solve", &Interpolator::solve)
         .def("get_model", &Interpolator::get_model)
+        .def("get_values", &Interpolator::get_values)
         .def("get_interpolant", &Interpolator::get_interpolant);
 }
 

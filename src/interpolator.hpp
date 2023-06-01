@@ -18,6 +18,7 @@ class Interpolator {
   void append_formula(const std::vector<std::vector<int>>& formula, bool first_part);
   bool solve(const std::vector<int>& assumptions);
   std::vector<int> get_model();
+  std::vector<int> get_values(const std::vector<int>& variables);
   std::pair<int, std::vector<std::vector<int>>> get_interpolant(const std::vector<int>& shared_variables, int auxiliary_variable_start);
 
  protected:
@@ -86,6 +87,10 @@ inline bool Interpolator::solve(const std::vector<int>& assumptions) {
 
 inline std::vector<int> Interpolator::get_model() {
   return solver.get_model();
+}
+
+inline std::vector<int> Interpolator::get_values(const std::vector<int>& variables) {
+  return solver.get_values(variables);
 }
 
 }
