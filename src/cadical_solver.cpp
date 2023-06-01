@@ -12,6 +12,7 @@ Cadical::CadicalTerminator Cadical::terminator;
 Cadical::Cadical() { // TODO: Pass temporary file name.
   solver.connect_terminator(&terminator);
   solver.set("lrat", true);
+  //solver.set("binary", false);
   trace_file = fopen("proof.lrat", "w");
   solver.trace_proof(trace_file, "lrat_trace");
 }

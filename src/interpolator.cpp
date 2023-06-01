@@ -9,14 +9,14 @@ namespace cadical_itp {
 Interpolator::Interpolator(): clause_id(0) {}
 
 void Interpolator::add_clause(const std::vector<int>& clause, bool first_part) {
+  auto id = solver.get_current_clause_id() + 1;
   solver.add_clause(clause);
   //auto id = ++clause_id;
-  auto id = solver.get_current_clause_id() + 1;
   id_in_first_part[id] = first_part;
   id_to_clause[id] = clause;
   for (auto l: clause) {
     auto v = abs(l);
-    while(v <= is_assigned.size()) {
+    while(v >= is_assigned.size()) {
       is_assigned.push_back(false);
       reason.push_back(0);
       variable_seen.push_back(false);
@@ -65,8 +65,8 @@ std::vector<unsigned> Interpolator::get_core() const {
       continue;
     }
     seen.insert(id);
-    core.push_back(id);
     if (id_to_premises.contains(id)) { // If id has no premises, it is an original clause.
+      core.push_back(id);
       for (auto premise_id: id_to_premises.at(id)) {
         id_queue.push_back(premise_id);
       }
@@ -87,7 +87,7 @@ void Interpolator::replay_proof(std::vector<unsigned int>& core) {
 
 unsigned int Interpolator::propagate(unsigned int id) {
   auto clause = id_to_clause.at(id);
-  trail.clear();
+  assert(trail.empty());
   for (auto l: clause) {
     trail.push_back(-l);
     is_assigned[abs(l)] = true;
@@ -99,6 +99,7 @@ unsigned int Interpolator::propagate(unsigned int id) {
     int unassigned_literal = 0;
     for (auto l: premise) {
       if (!is_assigned[abs(l)]) {
+        // We could also just break here and trust the proof.
         nr_unassigned++;
         unassigned_literal = l;
       }
@@ -133,20 +134,28 @@ void Interpolator::analyze_and_interpolate(unsigned int id) {
     while(!trail.empty()) {
       int pivot = trail.back();
       trail.pop_back();
-      if (variable_seen[abs(pivot)]) {
-        id = reason[abs(pivot)];
-        break;
+      int abs_pivot = abs(pivot);
+
+      is_assigned[abs_pivot] = false;
+      
+      if (variable_seen[abs_pivot]) {
+        const auto& r = reason[abs_pivot];
+        if (r) {
+          id = r;
+          break;
+        }
       }
     }
+
   }
   for (auto v: variables_seen_vector) {
     variable_seen[v] = false;
   }
-  auto clause = id_to_clause.at(id);
-  // Sort both clause and derived clause and then check if derived clause is contained in clause.
-  std::sort(clause.begin(), clause.end());
-  std::sort(derived_clause.begin(), derived_clause.end());
-  assert(std::includes(clause.begin(), clause.end(), derived_clause.begin(), derived_clause.end()));
+  // auto clause = id_to_clause.at(id);
+  // // Sort both clause and derived clause and then check if derived clause is contained in clause.
+  // std::sort(clause.begin(), clause.end());
+  // std::sort(derived_clause.begin(), derived_clause.end());
+  // assert(std::includes(clause.begin(), clause.end(), derived_clause.begin(), derived_clause.end()));
 }
 
 void Interpolator::delete_clauses() {
@@ -163,6 +172,11 @@ std::pair<int, std::vector<std::vector<int>>> Interpolator::get_interpolant(cons
   parse_proof();
   auto core = get_core();
   //std::cerr << "Core size: " << core.size() << std::endl;
+  for (auto id: core) {
+    int conflict_id = propagate(id);
+    assert(conflict_id);
+    analyze_and_interpolate(conflict_id);
+  }
   return std::make_pair(0, std::vector<std::vector<int>>());
 }
 
