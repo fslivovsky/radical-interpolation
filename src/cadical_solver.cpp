@@ -55,13 +55,9 @@ int Cadical::solve(const std::vector<int>& assumptions) {
 }
 
 int Cadical::solve() {
-  trace_file = freopen("proof.lrat", "w", trace_file);
   int result = solver.solve();
   if (InterruptHandler::interrupted(nullptr)) {
     throw InterruptedException();
-  }
-  if (result == 20) {
-    solver.flush_proof_trace();
   }
   return result;
 }

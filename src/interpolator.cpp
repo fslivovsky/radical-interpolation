@@ -10,7 +10,8 @@ Interpolator::Interpolator(): clause_id(0) {}
 
 void Interpolator::add_clause(const std::vector<int>& clause, bool first_part) {
   solver.add_clause(clause);
-  auto id = ++clause_id;
+  //auto id = ++clause_id;
+  auto id = solver.get_current_clause_id() + 1;
   id_in_first_part[id] = first_part;
   id_to_clause[id] = clause;
   for (auto l: clause) {
@@ -27,6 +28,7 @@ void Interpolator::add_clause(const std::vector<int>& clause, bool first_part) {
 }
 
 void Interpolator::parse_proof() {
+  solver.flush_proof();
   std::ifstream input("proof.lrat", std::ios::binary);
   assert(input); // TODO: Replace with exception.
 
@@ -35,11 +37,11 @@ void Interpolator::parse_proof() {
     if (byte == 'a') {
       clause_id++;
       auto [id, clause, premise_ids] = read_lrat_line(input);
-      if (id != clause_id) {
+      /*if (id != clause_id) {
         std::cout << "Error: Clause id " << id << " does not match expected id " << clause_id << std::endl;
         exit(1);
-      }
-      assert(id == clause_id);
+      }*/
+      //assert(id == clause_id);
       id_to_clause[id] = clause;
       id_to_premises[id] = premise_ids;
       final_id = id;
@@ -49,6 +51,7 @@ void Interpolator::parse_proof() {
     }
   }
   input.close();
+  solver.reset_proof();
 }
 
 std::vector<unsigned> Interpolator::get_core() const {
