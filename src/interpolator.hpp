@@ -7,6 +7,8 @@
 #include <unordered_map>
 #include <fstream>
 
+#include "aig/aig/aig.h"
+
 #include "cadical_solver.hpp"
 
 namespace cadical_itp {
@@ -27,8 +29,12 @@ class Interpolator {
   std::vector<unsigned> get_core() const;
   void replay_proof(std::vector<unsigned int>& core);
   unsigned int propagate(unsigned int id);
-  void analyze_and_interpolate(unsigned int id);
+  abc::Aig_Obj_t* analyze_and_interpolate(unsigned int id);
   void delete_clauses();
+  void set_shared_variables(const std::vector<int>& shared_variables);
+
+  // AIG procedures.
+  abc::Aig_Obj_t* get_aig_node(unsigned int id);
 
   std::vector<unsigned int> reason;
   std::vector<bool> is_assigned;
@@ -36,8 +42,8 @@ class Interpolator {
   std::unordered_map<unsigned int, bool> id_in_first_part;
   std::unordered_map<unsigned int, std::vector<int>> id_to_clause;
   std::unordered_map<unsigned int, std::vector<unsigned int>> id_to_premises;
-  std::unordered_set<int> first_part_variables;
-  std::vector<std::vector<int>> interpolant_clauses;
+  std::unordered_set<int> first_part_variables_set;
+  std::unordered_set<int> shared_variables_set;
   std::vector<int> last_assumptions;
   unsigned int final_id;
   std::vector<int> trail;
@@ -45,6 +51,10 @@ class Interpolator {
   unsigned int clause_id;
   Cadical solver;
 
+  // For managing AIGs.
+  std::unordered_map<unsigned int, abc::Aig_Obj_t*> id_to_aig_node;
+  std::unordered_map<int, abc::Aig_Obj_t*> shared_variable_to_ci;
+  abc::Aig_Man_t * aig_man;
 };
 
 std::tuple<unsigned int, std::vector<int>, std::vector<unsigned int>> read_lrat_line(std::ifstream& input);

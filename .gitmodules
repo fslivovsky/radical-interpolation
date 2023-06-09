@@ -1,3 +1,6 @@
 [submodule "radical"]
 	path = radical
 	url = https://github.com/fslivovsky/radical.git
+[submodule "abc"]
+	path = abc
+	url = https://github.com/berkeley-abc/abc.git

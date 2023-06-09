@@ -17,6 +17,9 @@ ExternalProject_Add(radical
     BUILD_IN_SOURCE 1
 )
 
+set(ABC_USE_NAMESPACE "abc")
+add_subdirectory(abc EXCLUDE_FROM_ALL)
+
 # Set the C++ Standard to C++20.
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
