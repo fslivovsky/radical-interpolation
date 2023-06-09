@@ -6,15 +6,11 @@
 
 namespace cadical_itp {
 
-Interpolator::Interpolator(): clause_id(0) {}
-
 void Interpolator::add_clause(const std::vector<int>& clause, bool first_part) {
   auto id = solver.get_current_clause_id() + 1;
-  std::cerr << "Adding clause with id " << id << std::endl;
   solver.add_clause(clause);
   //auto id = ++clause_id;
   id_in_first_part[id] = first_part;
-  id_to_clause[id] = clause;
   for (auto l: clause) {
     auto v = abs(l);
     while(v >= is_assigned.size()) {
@@ -28,34 +24,10 @@ void Interpolator::add_clause(const std::vector<int>& clause, bool first_part) {
   }
 }
 
-void Interpolator::parse_proof() {
-  solver.flush_proof();
-  std::ifstream input("proof.lrat", std::ios::binary);
-  assert(input); // TODO: Replace with exception.
-
-  unsigned char byte;
-  while (input.read(reinterpret_cast<char*>(&byte), sizeof(char))) {
-    if (byte == 'a') {
-      clause_id++;
-      auto [id, clause, premise_ids] = read_lrat_line(input);
-      assert(id);
-      std::cerr << "id: " << id << std::endl;
-      id_to_clause[id] = clause;
-      id_to_premises[id] = premise_ids;
-      final_id = id;
-    } else if (byte == 'd') {
-      auto ids_to_delete = read_deletion_line(input);
-      //to_delete.insert(to_delete.end(), ids_to_delete.begin(), ids_to_delete.end());
-    }
-  }
-  input.close();
-  solver.reset_proof();
-}
-
-std::vector<unsigned> Interpolator::get_core() const {
-  std::vector<unsigned> core;
-  std::vector<unsigned int> id_queue = {final_id};
-  std::unordered_set<unsigned int> seen;
+std::vector<uint64_t> Interpolator::get_core() const {
+  std::vector<uint64_t> core;
+  std::vector<uint64_t> id_queue = {solver.get_latest_id()};
+  std::unordered_set<uint64_t> seen;
   while (!id_queue.empty()) {
     auto id = id_queue.back();
     id_queue.pop_back();
@@ -63,9 +35,9 @@ std::vector<unsigned> Interpolator::get_core() const {
       continue;
     }
     seen.insert(id);
-    if (id_to_premises.contains(id)) { // If id has no premises, it is an original clause.
+    if (!solver.is_initial_clause(id)) {
       core.push_back(id);
-      for (auto premise_id: id_to_premises.at(id)) {
+      for (auto premise_id: solver.get_premises(id)) {
         id_queue.push_back(premise_id);
       }
     }
@@ -73,14 +45,13 @@ std::vector<unsigned> Interpolator::get_core() const {
   return core;
 }
 
-abc::Aig_Obj_t* Interpolator::analyze_and_interpolate(unsigned int id) {
+abc::Aig_Obj_t* Interpolator::analyze_and_interpolate(uint64_t id) {
   std::vector<int> derived_clause;
   std::vector<int> variables_seen_vector;
-  abc::Aig_Obj_t * interpolant_aig_node = abc::Aig_ManConst0(aig_man); //get_aig_node(id); // TODO
+  abc::Aig_Obj_t * interpolant_aig_node = get_aig_node(id);
   int abs_pivot = 0;
   while (id) {
-    assert(id_to_clause.contains(id));
-    auto premise = id_to_clause.at(id);
+    auto premise = solver.get_clause(id);
     for (auto l: premise) {
       if (!variable_seen[abs(l)]) {
         variable_seen[abs(l)] = true;
@@ -100,14 +71,15 @@ abc::Aig_Obj_t* Interpolator::analyze_and_interpolate(unsigned int id) {
       if (variable_seen[abs_pivot]) {
         const auto& r = reason[abs_pivot];
         if (r) {
-          /*auto reason_aig_node = get_aig_node(r);
-          interpolant_aig_node = (!first_part_variables_set.contains(abs_pivot) || shared_variables_set.contains(abs_pivot)) ? abc::Aig_And(aig_man, interpolant_aig_node, reason_aig_node) : abc::Aig_Or(aig_man, interpolant_aig_node, reason_aig_node);*/
+          auto reason_aig_node = get_aig_node(r);
+          interpolant_aig_node = (!first_part_variables_set.contains(abs_pivot) || shared_variables_set.contains(abs_pivot)) ? abc::Aig_And(aig_man, interpolant_aig_node, reason_aig_node) : abc::Aig_Or(aig_man, interpolant_aig_node, reason_aig_node);
           id = r;
           break;
         }
       }
     }
   }
+  assert(trail.empty());
   for (auto v: variables_seen_vector) {
     variable_seen[v] = false;
   }
@@ -115,7 +87,7 @@ abc::Aig_Obj_t* Interpolator::analyze_and_interpolate(unsigned int id) {
 }
 
 
-void Interpolator::replay_proof(std::vector<unsigned int>& core) {
+void Interpolator::replay_proof(std::vector<uint64_t>& core) {
   std::sort(core.begin(), core.end());
   for (auto id: core) {
     auto conflict_id = propagate(id);
@@ -125,9 +97,8 @@ void Interpolator::replay_proof(std::vector<unsigned int>& core) {
   }
 }
 
-unsigned int Interpolator::propagate(unsigned int id) {
-  assert(id_to_clause.contains(id));
-  auto clause = id_to_clause.at(id);
+uint64_t Interpolator::propagate(uint64_t id) {
+  auto clause = solver.get_clause(id);
 
   assert(trail.empty());
   for (auto l: clause) {
@@ -135,15 +106,11 @@ unsigned int Interpolator::propagate(unsigned int id) {
     is_assigned[abs(l)] = true;
   }
 
-  assert(id_to_premises.contains(id));
-  auto premise_ids = id_to_premises.at(id);
+  assert(!solver.is_initial_clause(id));
+  auto premise_ids = solver.get_premises(id);
   
   for (auto premise_id: premise_ids) {
-    if (!id_to_clause.contains(premise_id)) {
-      std::cerr << "Error: Clause id " << premise_id << " not found." << std::endl;
-    }
-    assert(id_to_clause.contains(premise_id));
-    auto premise = id_to_clause.at(premise_id);
+    auto premise = solver.get_clause(premise_id);
 
     int nr_unassigned = 0;
     int unassigned_literal = 0;
@@ -168,21 +135,17 @@ unsigned int Interpolator::propagate(unsigned int id) {
 
 
 void Interpolator::delete_clauses() {
-  for (auto id: to_delete) {
-    id_to_clause.erase(id);
-    id_to_premises.erase(id);
-  }
   to_delete.clear();
 }
 
-abc::Aig_Obj_t* Interpolator::get_aig_node(unsigned int id) {
+abc::Aig_Obj_t* Interpolator::get_aig_node(uint64_t id) {
   if (id_to_aig_node.contains(id)) {
     return id_to_aig_node.at(id);
   }
   // If there is no AIG node for this id, it has to be an original clause.
-  assert(!id_to_premises.contains(id));
+  assert(solver.is_initial_clause(id));
   if (id_in_first_part.at(id)) {
-    auto clause = id_to_clause.at(id);
+    auto clause = solver.get_clause(id);
     // Create an AIG node for the shared clause.
     auto aig_output = abc::Aig_ManConst0(aig_man);
     for (auto l: clause) {
@@ -213,9 +176,8 @@ void Interpolator::set_shared_variables(const std::vector<int>& shared_variables
 
 std::pair<int, std::vector<std::vector<int>>> Interpolator::get_interpolant(const std::vector<int>& shared_variables, int auxiliary_variable_start) {
   //delete_clauses();
-  parse_proof();
   auto core = get_core();
-  //std::cerr << "Core size: " << core.size() << std::endl;
+  std::cerr << "Core size: " << core.size() << std::endl;
   aig_man = abc::Aig_ManStart(core.size());
   set_shared_variables(shared_variables);
   replay_proof(core);
@@ -225,29 +187,6 @@ std::pair<int, std::vector<std::vector<int>>> Interpolator::get_interpolant(cons
   std::cerr << "Removed " << removed << " nodes." << std::endl;
   abc::Aig_ManStop(aig_man);
   return std::make_pair(0, std::vector<std::vector<int>>());
-}
-
-std::tuple<unsigned int, std::vector<int>, std::vector<unsigned int>> read_lrat_line(std::ifstream& input) {
-  unsigned int id = read_number(input);
-  unsigned int u;
-  std::vector<int> clause;
-  while ((u = read_number(input))) {
-    clause.push_back(get_literal(u));
-  }
-  std::vector<unsigned int> premise_ids;
-  while ((u = read_number(input))) {
-    premise_ids.push_back(u / 2);
-  }
-  return std::make_tuple(id, clause, premise_ids);
-}
-
-std::vector<unsigned int> read_deletion_line(std::ifstream& input) {
-  unsigned int u;
-  std::vector<unsigned int> deleted_ids;
-  while ((u = read_number(input))) {
-    deleted_ids.push_back(u / 2);
-  }
-  return deleted_ids;
 }
 
 }

@@ -12,8 +12,11 @@ add_library(interpolator interpolator.cpp interpolator.hpp)
 target_link_libraries(interpolator cadical_solver libabc-pic)
 target_include_directories(interpolator PRIVATE ${CMAKE_SOURCE_DIR}/abc/src/abc/)
 
+add_library(definabilitychecker definabilitychecker.cpp definabilitychecker.hpp)
+target_link_libraries(definabilitychecker interpolator)
+
 add_executable(test main.cpp)
-target_link_libraries(test interpolator libabc-pic)
+target_link_libraries(test definabilitychecker libabc-pic)
 target_include_directories(test PRIVATE ${CMAKE_SOURCE_DIR}/abc/src/abc/)
 
 set_target_properties(test PROPERTIES

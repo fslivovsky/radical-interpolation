@@ -21,16 +21,17 @@ class Cadical {
   std::vector<int> get_failed(const std::vector<int>& assumptions);
   std::vector<int> get_values(const std::vector<int>& variables);
   std::vector<int> get_model();
-  void flush_proof();
-  void reset_proof();
   int val(int variable);
   uint64_t get_current_clause_id() const;
+  uint64_t get_latest_id() const;
+  bool is_initial_clause(uint64_t id) const;
+  const std::vector<uint64_t>& get_premises(uint64_t id) const;
+  const std::vector<int>& get_clause(uint64_t id) const;
 
  private:
   void set_assumptions(const std::vector<int>& assumptions);
 
   CaDiCaL::Solver solver;
-  FILE* trace_file;
 
   class CadicalTerminator: public CaDiCaL::Terminator {
    public:
@@ -40,16 +41,24 @@ class Cadical {
   static CadicalTerminator terminator;
 };
 
-inline void Cadical::flush_proof() {
-  solver.flush_proof_trace();
-}
-
-inline void Cadical::reset_proof() {
-  trace_file = freopen("proof.lrat", "w", trace_file);
-}
-
 inline uint64_t Cadical::get_current_clause_id() const {
   return solver.get_current_clause_id();
+}
+
+inline uint64_t Cadical::get_latest_id() const {
+  return solver.get_latest_id();
+}
+
+inline bool Cadical::is_initial_clause(uint64_t id) const {
+  return solver.is_initial_clause(id);
+}
+
+inline const std::vector<uint64_t>& Cadical::get_premises(uint64_t id) const {
+  return solver.get_premises(id);
+}
+
+inline const std::vector<int>& Cadical::get_clause(uint64_t id) const {
+  return solver.get_clause(id);
 }
 
 }
