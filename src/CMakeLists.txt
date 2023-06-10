@@ -15,7 +15,7 @@ target_include_directories(interpolator PRIVATE ${CMAKE_SOURCE_DIR}/abc/src/abc/
 add_library(definabilitychecker definabilitychecker.cpp definabilitychecker.hpp)
 target_link_libraries(definabilitychecker interpolator)
 
-add_executable(test main.cpp)
+add_executable(test main.cpp qdimacs.hpp)
 target_link_libraries(test definabilitychecker libabc-pic)
 target_include_directories(test PRIVATE ${CMAKE_SOURCE_DIR}/abc/src/abc/)
 

@@ -4,6 +4,10 @@
 #include <algorithm>
 #include <iostream>
 
+#include "opt/dar/dar.h"
+
+using namespace abc; // Needed for macro expansion.
+
 namespace cadical_itp {
 
 void Interpolator::add_clause(const std::vector<int>& clause, bool first_part) {
@@ -38,6 +42,7 @@ std::vector<uint64_t> Interpolator::get_core() const {
     if (!solver.is_initial_clause(id)) {
       core.push_back(id);
       for (auto premise_id: solver.get_premises(id)) {
+        assert(premise_id < id);
         id_queue.push_back(premise_id);
       }
     }
@@ -45,7 +50,7 @@ std::vector<uint64_t> Interpolator::get_core() const {
   return core;
 }
 
-abc::Aig_Obj_t* Interpolator::analyze_and_interpolate(uint64_t id) {
+std::pair<std::vector<int>, abc::Aig_Obj_t*>  Interpolator::analyze_and_interpolate(uint64_t id) {
   std::vector<int> derived_clause;
   std::vector<int> variables_seen_vector;
   abc::Aig_Obj_t * interpolant_aig_node = get_aig_node(id);
@@ -83,7 +88,7 @@ abc::Aig_Obj_t* Interpolator::analyze_and_interpolate(uint64_t id) {
   for (auto v: variables_seen_vector) {
     variable_seen[v] = false;
   }
-  return interpolant_aig_node;
+  return std::make_pair(derived_clause, interpolant_aig_node);
 }
 
 
@@ -91,8 +96,9 @@ void Interpolator::replay_proof(std::vector<uint64_t>& core) {
   std::sort(core.begin(), core.end());
   for (auto id: core) {
     auto conflict_id = propagate(id);
-    assert(conflict_id);
-    auto id_interpolant = analyze_and_interpolate(conflict_id);
+    assert(conflict_id > 0);
+    auto [derived_clause, id_interpolant] = analyze_and_interpolate(conflict_id);
+    assert(contains(derived_clause, solver.get_clause(id)));
     id_to_aig_node[id] = id_interpolant;
   }
 }
@@ -104,6 +110,7 @@ uint64_t Interpolator::propagate(uint64_t id) {
   for (auto l: clause) {
     trail.push_back(-l);
     is_assigned[abs(l)] = true;
+    reason[abs(l)] = 0;
   }
 
   assert(!solver.is_initial_clause(id));
@@ -123,7 +130,7 @@ uint64_t Interpolator::propagate(uint64_t id) {
     }
     assert(nr_unassigned <= 1);
     if (nr_unassigned == 1) {
-      trail.push_back(-unassigned_literal);
+      trail.push_back(unassigned_literal);
       is_assigned[abs(unassigned_literal)] = true;
       reason[abs(unassigned_literal)] = premise_id;
     } else {
@@ -171,22 +178,77 @@ void Interpolator::set_shared_variables(const std::vector<int>& shared_variables
   for (auto v: shared_variables) {
     shared_variable_to_ci[v] = abc::Aig_ObjCreateCi(aig_man);
   }
-  abc::Aig_ManSetCioIds(aig_man);
+}
+
+std::vector<std::vector<int>> Interpolator::get_interpolant_clauses(const std::vector<int>& shared_variables, int auxiliary_variable_start) {
+  std::vector<std::vector<int>> interpolant_clauses;
+  abc::Vec_Ptr_t * vNodes;
+  abc::Aig_Obj_t * pObj, * pConst1 = NULL;
+  int i;
+  assert(abc::Aig_ManCoNum(aig_man) == 1);
+  // check if constant is used
+  Aig_ManForEachCo( aig_man, pObj, i) {
+    if (abc::Aig_ObjIsConst1(abc::Aig_ObjFanin0(pObj)))
+      pConst1 = abc::Aig_ManConst1(aig_man);
+  }
+  // Assign shared variables to CIs.
+  Aig_ManForEachCi( aig_man, pObj, i) {
+    pObj->iData = shared_variables[i];
+  }
+  // collect nodes in the DFS order
+  vNodes = abc::Aig_ManDfs(aig_man, 1);
+  // assign IDs to objects
+  Aig_ManForEachCo( aig_man, pObj, i ) {
+    pObj->iData = auxiliary_variable_start++;
+  }
+  abc::Aig_ManConst1(aig_man)->iData = auxiliary_variable_start++;
+  Vec_PtrForEachEntry( abc::Aig_Obj_t *, vNodes, pObj, i ) {
+    pObj->iData = auxiliary_variable_start++;
+  }
+  // Add clauses from Tseitin conversion.
+  if (pConst1) { // Constant 1 if necessary.
+    interpolant_clauses.push_back( { pConst1->iData } );
+  }
+  Vec_PtrForEachEntry( abc::Aig_Obj_t *, vNodes, pObj, i ) {
+    auto variable_output = pObj->iData;
+    auto variable_input0 = abc::Aig_ObjFanin0(pObj)->iData;
+    auto variable_input1 = abc::Aig_ObjFanin1(pObj)->iData;
+    auto literal_input0 = Aig_ObjFaninC0(pObj) ? -variable_input0 : variable_input0;
+    auto literal_input1 = Aig_ObjFaninC1(pObj) ? -variable_input1 : variable_input1;
+    interpolant_clauses.push_back( { -variable_output, literal_input0 } );
+    interpolant_clauses.push_back( { -variable_output, literal_input1 } );
+    interpolant_clauses.push_back( { variable_output, -literal_input0, -literal_input1 } );
+  }
+  // Write clauses for PO.
+  Aig_ManForEachCo( aig_man, pObj, i ) {
+    auto variable_output = pObj->iData;
+    auto variable_input0 = abc::Aig_ObjFanin0(pObj)->iData;
+    auto literal_input0 = Aig_ObjFaninC0(pObj) ? -variable_input0 : variable_input0;
+    interpolant_clauses.push_back( { -variable_output, literal_input0 } );
+    interpolant_clauses.push_back( { variable_output, -literal_input0 } );
+  }
+  abc::Vec_PtrFree( vNodes );
+  return interpolant_clauses;
 }
 
 std::pair<int, std::vector<std::vector<int>>> Interpolator::get_interpolant(const std::vector<int>& shared_variables, int auxiliary_variable_start) {
   //delete_clauses();
+  solver.get_failed(last_assumptions); // Needed to generate final part of LRAT proof.
   auto core = get_core();
   std::cerr << "Core size: " << core.size() << std::endl;
   aig_man = abc::Aig_ManStart(core.size());
   set_shared_variables(shared_variables);
   replay_proof(core);
-  std::cout << "Number of nodes: " << Aig_ManNodeNum(aig_man) << std::endl;
-  // Cleanup AIG.
-  auto removed = abc::Aig_ManCleanup(aig_man);
-  std::cerr << "Removed " << removed << " nodes." << std::endl;
+  abc::Aig_ObjCreateCo(aig_man, id_to_aig_node.at(core.back()));
+  //std::cout << "Last in core:" << core.back() << " last clause solver " << solver.get_current_clause_id() << std::endl;
+  std::cout << "Number of nodes before: " << Aig_ManNodeNum(aig_man) << std::endl;
+  abc::Dar_LibStart();
+  aig_man = Dar_ManRewriteDefault(aig_man);
+  abc::Dar_LibStop();
+  std::cout << "Number of nodes after: " << Aig_ManNodeNum(aig_man) << std::endl;
+  auto interpolant_clauses = get_interpolant_clauses(shared_variables, auxiliary_variable_start);
   abc::Aig_ManStop(aig_man);
-  return std::make_pair(0, std::vector<std::vector<int>>());
+  return std::make_pair(auxiliary_variable_start, interpolant_clauses);
 }
 
 }

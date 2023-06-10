@@ -67,7 +67,9 @@ std::vector<std::vector<int>> Definabilitychecker::get_definition(int variable, 
   assert(variable > 0);
   std::vector<int> assumptions;
   for (auto v: shared_variables) {
-    assert(v > 0);
+    if (v >= equality_selector.size() or equality_selector[v] == 0) {
+      add_variable(v);
+    }
     assumptions.push_back(equality_selector[v]);
   }
   assumptions.push_back(translate_literal(variable, true));

@@ -27,9 +27,10 @@ class Interpolator {
   std::vector<uint64_t> get_core() const;
   void replay_proof(std::vector<uint64_t>& core);
   uint64_t propagate(uint64_t id);
-  abc::Aig_Obj_t* analyze_and_interpolate(uint64_t id);
+  std::pair<std::vector<int>, abc::Aig_Obj_t*> analyze_and_interpolate(uint64_t id);
   void delete_clauses();
   void set_shared_variables(const std::vector<int>& shared_variables);
+  std::vector<std::vector<int>> get_interpolant_clauses(const std::vector<int>& shared_variables, int auxiliary_variable_start);
 
   // AIG procedures.
   abc::Aig_Obj_t* get_aig_node(uint64_t id);
@@ -69,6 +70,18 @@ inline std::vector<int> Interpolator::get_model() {
 
 inline std::vector<int> Interpolator::get_values(const std::vector<int>& variables) {
   return solver.get_values(variables);
+}
+
+// For debugging.
+
+inline bool contains(std::vector<int> v1, std::vector<int> v2) {
+  if(v1.size() < v2.size()) 
+      return false; 
+
+  std::sort(v1.begin(), v1.end());
+  std::sort(v2.begin(), v2.end());
+
+  return std::includes(v1.begin(), v1.end(), v2.begin(), v2.end());
 }
 
 }
