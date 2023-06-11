@@ -33,6 +33,8 @@ auto parseQDIMACS(const std::string& filename) {
   std::vector<std::vector<int>> clauses;
 
   while (std::getline(file, line)) {
+    if (line.empty())
+      continue;
     std::istringstream iss(line);
     char ch;
     iss >> ch;

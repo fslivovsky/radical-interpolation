@@ -15,6 +15,8 @@ namespace cadical_itp {
 
 class Interpolator {
  public:
+  Interpolator();
+  ~Interpolator();
   void add_clause(const std::vector<int>& clause, bool first_part);
   void append_formula(const std::vector<std::vector<int>>& formula, bool first_part);
   bool solve(const std::vector<int>& assumptions);

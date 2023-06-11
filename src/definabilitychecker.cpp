@@ -7,22 +7,27 @@ void Definabilitychecker::add_variable(int variable) {
   while (variable >= equality_selector.size()) {
     equality_selector.push_back(0);
   }
-  auto selector = 3 * variable + 2;
-  equality_selector[variable] = selector;
+  auto equal_selector = 5 * variable + 2;
+  auto true_selector = 5 * variable + 3;
+  auto false_selector = 5 * variable + 4;
+  equality_selector[variable] = equal_selector;
   auto first_part_variable = translate_literal(variable, true);
   auto second_part_variable = translate_literal(variable, false);
-  interpolator.append_formula({{-selector, first_part_variable, -second_part_variable}, {-selector, -first_part_variable, second_part_variable}}, false);
+  interpolator.append_formula({{-equal_selector, first_part_variable, -second_part_variable}, {-equal_selector, -first_part_variable, second_part_variable}}, false);
+  // Workaround to avoid failed assumptions at decision level 0: we use require -selector and 1 as an assumption. 1 is a variable that is unused.
+  interpolator.add_clause({-true_selector, -1, first_part_variable}, true);
+  interpolator.add_clause({-false_selector, -1, -second_part_variable}, false);
 }
 
 int Definabilitychecker::translate_literal(int literal, bool first_part) {
   auto v = abs(literal);
-  auto v_translated = 3 * v + first_part;
+  auto v_translated = 5 * v + first_part;
   return literal < 0 ? -v_translated : v_translated;
 }
 
 int Definabilitychecker::original_literal(int translated_literal) {
   auto v = abs(translated_literal);
-  auto v_original = v / 3;
+  auto v_original = v / 5;
   if (v_original >= equality_selector.size()) {
     // This is an auxiliary variable introduced during interpolation.
     return translated_literal;
@@ -72,13 +77,16 @@ std::vector<std::vector<int>> Definabilitychecker::get_definition(int variable, 
     }
     assumptions.push_back(equality_selector[v]);
   }
-  assumptions.push_back(translate_literal(variable, true));
-  assumptions.push_back(translate_literal(-variable, false));
+  auto true_selector = 5 * variable + 3;
+  auto false_selector = 5 * variable + 4;
+  assumptions.push_back(true_selector);
+  assumptions.push_back(false_selector);
+  assumptions.push_back(1);
   bool has_definition = !interpolator.solve(assumptions);
   if (!has_definition) {
     return {};
   }
-  auto [output_variable, definition] = interpolator.get_interpolant(translate_clause(shared_variables, true), 3 * equality_selector.size());
+  auto [output_variable, definition] = interpolator.get_interpolant(translate_clause(shared_variables, true), 5 * equality_selector.size());
   std::vector<std::vector<int>> definition_original;
   for (auto clause: definition) {
     definition_original.push_back(original_clause(clause));

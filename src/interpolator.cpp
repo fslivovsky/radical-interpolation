@@ -3,6 +3,7 @@
 #include <cassert>
 #include <algorithm>
 #include <iostream>
+#include <string>
 
 #include "opt/dar/dar.h"
 
@@ -10,10 +11,17 @@ using namespace abc; // Needed for macro expansion.
 
 namespace cadical_itp {
 
+Interpolator::Interpolator() {
+  abc::Dar_LibStart();
+}
+
+Interpolator::~Interpolator() {
+  abc::Dar_LibStop();
+}
+
 void Interpolator::add_clause(const std::vector<int>& clause, bool first_part) {
   auto id = solver.get_current_clause_id() + 1;
   solver.add_clause(clause);
-  //auto id = ++clause_id;
   id_in_first_part[id] = first_part;
   for (auto l: clause) {
     auto v = abs(l);
@@ -54,6 +62,7 @@ std::pair<std::vector<int>, abc::Aig_Obj_t*>  Interpolator::analyze_and_interpol
   std::vector<int> derived_clause;
   std::vector<int> variables_seen_vector;
   abc::Aig_Obj_t * interpolant_aig_node = get_aig_node(id);
+  std::string interpolant_string = std::to_string(id);
   int abs_pivot = 0;
   while (id) {
     auto premise = solver.get_clause(id);
@@ -77,13 +86,22 @@ std::pair<std::vector<int>, abc::Aig_Obj_t*>  Interpolator::analyze_and_interpol
         const auto& r = reason[abs_pivot];
         if (r) {
           auto reason_aig_node = get_aig_node(r);
-          interpolant_aig_node = (!first_part_variables_set.contains(abs_pivot) || shared_variables_set.contains(abs_pivot)) ? abc::Aig_And(aig_man, interpolant_aig_node, reason_aig_node) : abc::Aig_Or(aig_man, interpolant_aig_node, reason_aig_node);
+          if (!first_part_variables_set.contains(abs_pivot) || shared_variables_set.contains(abs_pivot)) {
+            interpolant_aig_node = abc::Aig_And(aig_man, interpolant_aig_node, reason_aig_node);
+            //interpolant_string+= "& ";
+            //interpolant_string+= std::to_string(r);
+          } else {
+            interpolant_aig_node = abc::Aig_Or(aig_man, interpolant_aig_node, reason_aig_node);
+            //interpolant_string+= "| ";
+            //interpolant_string+= std::to_string(r);
+          }
           id = r;
           break;
         }
       }
     }
   }
+  //std::cerr << interpolant_string;
   assert(trail.empty());
   for (auto v: variables_seen_vector) {
     variable_seen[v] = false;
@@ -91,13 +109,13 @@ std::pair<std::vector<int>, abc::Aig_Obj_t*>  Interpolator::analyze_and_interpol
   return std::make_pair(derived_clause, interpolant_aig_node);
 }
 
-
 void Interpolator::replay_proof(std::vector<uint64_t>& core) {
   std::sort(core.begin(), core.end());
   for (auto id: core) {
     auto conflict_id = propagate(id);
     assert(conflict_id > 0);
     auto [derived_clause, id_interpolant] = analyze_and_interpolate(conflict_id);
+    //std::cerr << ":" << id << std::endl;
     assert(contains(derived_clause, solver.get_clause(id)));
     id_to_aig_node[id] = id_interpolant;
   }
@@ -151,13 +169,16 @@ abc::Aig_Obj_t* Interpolator::get_aig_node(uint64_t id) {
   }
   // If there is no AIG node for this id, it has to be an original clause.
   assert(solver.is_initial_clause(id));
+  //std::cerr << id << ": ";
   if (id_in_first_part.at(id)) {
     auto clause = solver.get_clause(id);
     // Create an AIG node for the shared clause.
     auto aig_output = abc::Aig_ManConst0(aig_man);
+    
     for (auto l: clause) {
       auto v = abs(l);
       if (shared_variable_to_ci.contains(v)) {
+        //std::cerr << l << " ";
         aig_output = abc::Aig_Or(aig_man, aig_output, abc::Aig_NotCond(shared_variable_to_ci.at(v), l < 0));
       }
     }
@@ -165,7 +186,9 @@ abc::Aig_Obj_t* Interpolator::get_aig_node(uint64_t id) {
   } else {
     // If it is in the second part, return a constant 1 node.
     id_to_aig_node[id] = abc::Aig_ManConst1(aig_man);
+    //std::cerr << "constant 1";
   }
+  //std::cerr << std::endl;
   return id_to_aig_node.at(id);
 }
 
@@ -242,9 +265,7 @@ std::pair<int, std::vector<std::vector<int>>> Interpolator::get_interpolant(cons
   abc::Aig_ObjCreateCo(aig_man, id_to_aig_node.at(core.back()));
   //std::cout << "Last in core:" << core.back() << " last clause solver " << solver.get_current_clause_id() << std::endl;
   std::cout << "Number of nodes before: " << Aig_ManNodeNum(aig_man) << std::endl;
-  abc::Dar_LibStart();
   aig_man = Dar_ManRewriteDefault(aig_man);
-  abc::Dar_LibStop();
   std::cout << "Number of nodes after: " << Aig_ManNodeNum(aig_man) << std::endl;
   auto interpolant_clauses = get_interpolant_clauses(shared_variables, auxiliary_variable_start);
   abc::Aig_ManStop(aig_man);
