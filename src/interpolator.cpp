@@ -34,6 +34,9 @@ void Interpolator::add_clause(const std::vector<int>& clause, bool first_part) {
       first_part_variables_set.insert(v);
     }
   }
+  std::vector<int> clause_ = clause;
+  std::sort(clause_.begin(), clause_.end());
+  initial_clause_to_id[clause_] = id;
 }
 
 std::vector<uint64_t> Interpolator::get_core() const {
@@ -164,12 +167,19 @@ void Interpolator::delete_clauses() {
 }
 
 abc::Aig_Obj_t* Interpolator::get_aig_node(uint64_t id) {
+  GET_AIG_NODE_START:
   if (id_to_aig_node.contains(id)) {
     return id_to_aig_node.at(id);
   }
   // If there is no AIG node for this id, it has to be an original clause.
   assert(solver.is_initial_clause(id));
-  //std::cerr << id << ": ";
+  if (!id_in_first_part.contains(id)) { // This can happen due to reconstruction of clauses in Cadical.
+    std::vector<int> clause = solver.get_clause(id);
+    std::sort(clause.begin(), clause.end());
+    assert(initial_clause_to_id.contains(clause));
+    id = initial_clause_to_id.at(clause);
+    goto GET_AIG_NODE_START;
+  }
   if (id_in_first_part.at(id)) {
     auto clause = solver.get_clause(id);
     // Create an AIG node for the shared clause.
