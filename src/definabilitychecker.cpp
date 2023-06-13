@@ -43,12 +43,10 @@ std::vector<int> Definabilitychecker::translate_clause(const std::vector<int>& c
   return translated_clause;
 }
 
-std::vector<int> Definabilitychecker::original_clause(const std::vector<int>& translated_clause) {
-  std::vector<int> clause;
-  for (auto l: translated_clause) {
-    clause.push_back(original_literal(l));
+void Definabilitychecker::original_clause(std::vector<int>& translated_clause) {
+  for (auto& l: translated_clause) {
+    l = original_literal(l);
   }
-  return clause;
 }
 
 void Definabilitychecker::add_clause(const std::vector<int>& clause) {
@@ -63,7 +61,7 @@ void Definabilitychecker::add_clause(const std::vector<int>& clause) {
 }
 
 void Definabilitychecker::append_formula(const std::vector<std::vector<int>>& formula) {
-  for (auto clause: formula) {
+  for (const auto& clause: formula) {
     add_clause(clause);
   }
 }
@@ -86,13 +84,12 @@ std::vector<std::vector<int>> Definabilitychecker::get_definition(int variable, 
   if (!has_definition) {
     return {};
   }
-  auto [output_variable, definition] = interpolator.get_interpolant(translate_clause(shared_variables, true), 5 * equality_selector.size());
-  std::vector<std::vector<int>> definition_original;
-  for (auto clause: definition) {
-    definition_original.push_back(original_clause(clause));
+  auto [output_variable, definition] = interpolator.get_interpolant(translate_clause(shared_variables, true), 5 * equality_selector.size(), false);
+  for (auto& clause: definition) {
+    original_clause(clause);
   }
-  definition_original.push_back({output_variable, -variable});
-  definition_original.push_back({-output_variable, variable});
-  return definition_original;
+  definition.push_back({ output_variable, -variable});
+  definition.push_back({-output_variable,  variable});
+  return definition;
 }
 

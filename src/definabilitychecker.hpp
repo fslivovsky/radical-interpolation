@@ -16,7 +16,7 @@ class Definabilitychecker {
   int translate_literal(int literal, bool first_part);
   int original_literal(int translated_literal);
   std::vector<int> translate_clause(const std::vector<int>& clause, bool first_part);
-  std::vector<int> original_clause(const std::vector<int>& translated_clause);
+  void original_clause(std::vector<int>& translated_clause);
 
   cadical_itp::Interpolator interpolator;
   std::vector<int> equality_selector;

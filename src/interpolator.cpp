@@ -25,6 +25,11 @@ void Interpolator::add_clause(const std::vector<int>& clause, bool first_part) {
   id_in_first_part[id] = first_part;
   for (auto l: clause) {
     auto v = abs(l);
+    if (v >= is_assigned.size()) {
+      is_assigned.reserve(v + 1);
+      reason.reserve(v + 1);
+      variable_seen.reserve(v + 1);
+    }
     while(v >= is_assigned.size()) {
       is_assigned.push_back(false);
       reason.push_back(0);
@@ -34,9 +39,6 @@ void Interpolator::add_clause(const std::vector<int>& clause, bool first_part) {
       first_part_variables_set.insert(v);
     }
   }
-  std::vector<int> clause_ = clause;
-  std::sort(clause_.begin(), clause_.end());
-  initial_clause_to_id[clause_] = id;
 }
 
 std::vector<uint64_t> Interpolator::get_core() const {
@@ -68,7 +70,7 @@ std::pair<std::vector<int>, abc::Aig_Obj_t*>  Interpolator::analyze_and_interpol
   std::string interpolant_string = std::to_string(id);
   int abs_pivot = 0;
   while (id) {
-    auto premise = solver.get_clause(id);
+    auto& premise = solver.get_clause(id);
     for (auto l: premise) {
       if (!variable_seen[abs(l)]) {
         variable_seen[abs(l)] = true;
@@ -89,14 +91,11 @@ std::pair<std::vector<int>, abc::Aig_Obj_t*>  Interpolator::analyze_and_interpol
         const auto& r = reason[abs_pivot];
         if (r) {
           auto reason_aig_node = get_aig_node(r);
-          if (!first_part_variables_set.contains(abs_pivot) || shared_variables_set.contains(abs_pivot)) {
-            interpolant_aig_node = abc::Aig_And(aig_man, interpolant_aig_node, reason_aig_node);
-            //interpolant_string+= "& ";
-            //interpolant_string+= std::to_string(r);
-          } else {
+          if (first_part_variables_set.contains(abs_pivot) && !shared_variables_set.contains(abs_pivot)) {
+            // This is a variable that is only in the first part.
             interpolant_aig_node = abc::Aig_Or(aig_man, interpolant_aig_node, reason_aig_node);
-            //interpolant_string+= "| ";
-            //interpolant_string+= std::to_string(r);
+          } else {
+            interpolant_aig_node = abc::Aig_And(aig_man, interpolant_aig_node, reason_aig_node);
           }
           id = r;
           break;
@@ -104,7 +103,6 @@ std::pair<std::vector<int>, abc::Aig_Obj_t*>  Interpolator::analyze_and_interpol
       }
     }
   }
-  //std::cerr << interpolant_string;
   assert(trail.empty());
   for (auto v: variables_seen_vector) {
     variable_seen[v] = false;
@@ -125,7 +123,7 @@ void Interpolator::replay_proof(std::vector<uint64_t>& core) {
 }
 
 uint64_t Interpolator::propagate(uint64_t id) {
-  auto clause = solver.get_clause(id);
+  auto& clause = solver.get_clause(id);
 
   assert(trail.empty());
   for (auto l: clause) {
@@ -135,10 +133,10 @@ uint64_t Interpolator::propagate(uint64_t id) {
   }
 
   assert(!solver.is_initial_clause(id));
-  auto premise_ids = solver.get_premises(id);
+  auto& premise_ids = solver.get_premises(id);
   
   for (auto premise_id: premise_ids) {
-    auto premise = solver.get_clause(premise_id);
+    auto& premise = solver.get_clause(premise_id);
 
     int nr_unassigned = 0;
     int unassigned_literal = 0;
@@ -167,21 +165,14 @@ void Interpolator::delete_clauses() {
 }
 
 abc::Aig_Obj_t* Interpolator::get_aig_node(uint64_t id) {
-  GET_AIG_NODE_START:
   if (id_to_aig_node.contains(id)) {
     return id_to_aig_node.at(id);
   }
   // If there is no AIG node for this id, it has to be an original clause.
   assert(solver.is_initial_clause(id));
-  if (!id_in_first_part.contains(id)) { // This can happen due to reconstruction of clauses in Cadical.
-    std::vector<int> clause = solver.get_clause(id);
-    std::sort(clause.begin(), clause.end());
-    assert(initial_clause_to_id.contains(clause));
-    id = initial_clause_to_id.at(clause);
-    goto GET_AIG_NODE_START;
-  }
+  assert(id_in_first_part.contains(id));
   if (id_in_first_part.at(id)) {
-    auto clause = solver.get_clause(id);
+    auto& clause = solver.get_clause(id);
     // Create an AIG node for the shared clause.
     auto aig_output = abc::Aig_ManConst0(aig_man);
     
@@ -215,6 +206,7 @@ void Interpolator::set_shared_variables(const std::vector<int>& shared_variables
 
 std::vector<std::vector<int>> Interpolator::get_interpolant_clauses(const std::vector<int>& shared_variables, int auxiliary_variable_start) {
   std::vector<std::vector<int>> interpolant_clauses;
+  interpolant_clauses.reserve(id_to_aig_node.size());
   abc::Vec_Ptr_t * vNodes;
   abc::Aig_Obj_t * pObj, * pConst1 = NULL;
   int i;
@@ -264,19 +256,20 @@ std::vector<std::vector<int>> Interpolator::get_interpolant_clauses(const std::v
   return interpolant_clauses;
 }
 
-std::pair<int, std::vector<std::vector<int>>> Interpolator::get_interpolant(const std::vector<int>& shared_variables, int auxiliary_variable_start) {
+std::pair<int, std::vector<std::vector<int>>> Interpolator::get_interpolant(const std::vector<int>& shared_variables, int auxiliary_variable_start, bool rewrite_aig) {
   //delete_clauses();
   solver.get_failed(last_assumptions); // Needed to generate final part of LRAT proof.
   auto core = get_core();
-  std::cerr << "Core size: " << core.size() << std::endl;
+  //std::cerr << "Core size: " << core.size() << std::endl;
   aig_man = abc::Aig_ManStart(core.size());
   set_shared_variables(shared_variables);
   replay_proof(core);
   abc::Aig_ObjCreateCo(aig_man, id_to_aig_node.at(core.back()));
   //std::cout << "Last in core:" << core.back() << " last clause solver " << solver.get_current_clause_id() << std::endl;
-  std::cout << "Number of nodes before: " << Aig_ManNodeNum(aig_man) << std::endl;
-  aig_man = Dar_ManRewriteDefault(aig_man);
-  std::cout << "Number of nodes after: " << Aig_ManNodeNum(aig_man) << std::endl;
+  //std::cout << "Number of nodes before: " << Aig_ManNodeNum(aig_man) << std::endl;
+  if (rewrite_aig)
+    aig_man = Dar_ManRewriteDefault(aig_man);
+  //std::cout << "Number of nodes after: " << Aig_ManNodeNum(aig_man) << std::endl;
   auto interpolant_clauses = get_interpolant_clauses(shared_variables, auxiliary_variable_start);
   abc::Aig_ManStop(aig_man);
   return std::make_pair(auxiliary_variable_start, interpolant_clauses);

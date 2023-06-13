@@ -12,8 +12,7 @@ Cadical::CadicalTerminator Cadical::terminator;
 Cadical::Cadical() {
   solver.connect_terminator(&terminator);
   solver.set("lrat", true);
-  //solver.set("lratfrat", true);
-  //solver.set("binary", false);
+  solver.set("inprocessing", false);
   solver.trace_proof();
 }
 

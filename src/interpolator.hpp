@@ -6,24 +6,12 @@
 #include <unordered_set>
 #include <unordered_map>
 #include <fstream>
-#include <functional>
 
 #include "aig/aig/aig.h"
 
 #include "cadical_solver.hpp"
 
 namespace cadical_itp {
-
-struct VectorHash {
-  std::size_t operator()(const std::vector<int>& v) const {
-    std::hash<int> hasher;
-    std::size_t seed = 0;
-    for (int i : v) {
-      seed ^= hasher(i) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-    }
-    return seed;
-  }
-};
 
 class Interpolator {
  public:
@@ -34,7 +22,7 @@ class Interpolator {
   bool solve(const std::vector<int>& assumptions);
   std::vector<int> get_model();
   std::vector<int> get_values(const std::vector<int>& variables);
-  std::pair<int, std::vector<std::vector<int>>> get_interpolant(const std::vector<int>& shared_variables, int auxiliary_variable_start);
+  std::pair<int, std::vector<std::vector<int>>> get_interpolant(const std::vector<int>& shared_variables, int auxiliary_variable_start, bool rewrite_aig);
 
  protected:
   std::vector<int> get_clause(uint64_t id) const;
@@ -59,7 +47,6 @@ class Interpolator {
   std::vector<int> trail;
   std::vector<uint64_t> to_delete;
   Cadical solver;
-  std::unordered_map<std::vector<int>, uint64_t, VectorHash> initial_clause_to_id;
 
   // For managing AIGs.
   std::unordered_map<uint64_t, abc::Aig_Obj_t*> id_to_aig_node;
