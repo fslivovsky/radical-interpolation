@@ -27,6 +27,8 @@ class Cadical {
   bool is_initial_clause(uint64_t id) const;
   const std::vector<uint64_t>& get_premises(uint64_t id) const;
   const std::vector<int>& get_clause(uint64_t id) const;
+  const std::vector<uint64_t>& get_delete_ids() const;
+  void clear_delete_ids();
 
  private:
   void set_assumptions(const std::vector<int>& assumptions);
@@ -59,6 +61,14 @@ inline const std::vector<uint64_t>& Cadical::get_premises(uint64_t id) const {
 
 inline const std::vector<int>& Cadical::get_clause(uint64_t id) const {
   return solver.get_clause(id);
+}
+
+inline const std::vector<uint64_t>& Cadical::get_delete_ids() const {
+  return solver.get_delete_ids();
+}
+
+inline void Cadical::clear_delete_ids() {
+  solver.clear_delete_ids();
 }
 
 }
