@@ -14,7 +14,7 @@ void Definabilitychecker::add_variable(int variable) {
   auto first_part_variable = translate_literal(variable, true);
   auto second_part_variable = translate_literal(variable, false);
   interpolator.append_formula({{-equal_selector, first_part_variable, -second_part_variable}, {-equal_selector, -first_part_variable, second_part_variable}}, false);
-  // Workaround to avoid failed assumptions at decision level 0: we use require -selector and 1 as an assumption. 1 is a variable that is unused.
+  // Workaround to avoid failed assumptions at decision level 0: we use -selector and 1 as an assumption. 1 is a variable that is unused.
   interpolator.add_clause({-true_selector, -1, first_part_variable}, true);
   interpolator.add_clause({-false_selector, -1, -second_part_variable}, false);
 }

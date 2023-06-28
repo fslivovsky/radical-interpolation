@@ -194,7 +194,7 @@ std::vector<std::vector<int>> Interpolator::get_interpolant_clauses(std::shared_
     std::cout << "Number of nodes after: " << Aig_ManNodeNum(aig_man) << std::endl;
   }
   std::vector<std::vector<int>> interpolant_clauses;
-  /* interpolant_clauses.reserve(id_to_aig_node.size());
+  interpolant_clauses.reserve(proofnode_to_aig_node.size());
   abc::Vec_Ptr_t * vNodes;
   abc::Aig_Obj_t * pObj, * pConst1 = NULL;
   int i;
@@ -240,7 +240,7 @@ std::vector<std::vector<int>> Interpolator::get_interpolant_clauses(std::shared_
     interpolant_clauses.push_back( { -variable_output, literal_input0 } );
     interpolant_clauses.push_back( { variable_output, -literal_input0 } );
   }
-  abc::Vec_PtrFree( vNodes ); */
+  abc::Vec_PtrFree( vNodes );
   abc::Aig_ManStop(aig_man);
   return interpolant_clauses;
 }
