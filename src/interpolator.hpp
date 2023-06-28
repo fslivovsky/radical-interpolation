@@ -6,12 +6,23 @@
 #include <unordered_set>
 #include <unordered_map>
 #include <fstream>
+#include <memory>
 
 #include "aig/aig/aig.h"
 
 #include "cadical_solver.hpp"
 
 namespace cadical_itp {
+
+struct Proofnode {
+  int label;
+  bool flag;
+  std::shared_ptr<Proofnode> left;
+  std::shared_ptr<Proofnode> right;
+  // Constructors
+  Proofnode(int label, const std::shared_ptr<Proofnode>& left, const std::shared_ptr<Proofnode>& right) : label(label), flag(false), left(left), right(right) {}
+  Proofnode(int label) : label(label), flag(false), left(nullptr), right(nullptr) {}
+};
 
 class Interpolator {
  public:
@@ -29,28 +40,28 @@ class Interpolator {
   std::vector<uint64_t> get_core() const;
   void replay_proof(std::vector<uint64_t>& core);
   uint64_t propagate(uint64_t id);
-  std::pair<std::vector<int>, abc::Aig_Obj_t*> analyze_and_interpolate(uint64_t id);
+  std::pair<std::vector<int>, std::shared_ptr<Proofnode>> analyze_and_interpolate(uint64_t id);
   void delete_clauses();
-  void set_shared_variables(const std::vector<int>& shared_variables);
-  std::vector<std::vector<int>> get_interpolant_clauses(const std::vector<int>& shared_variables, int auxiliary_variable_start);
-
-  // AIG procedures.
-  abc::Aig_Obj_t* get_aig_node(uint64_t id);
+  std::vector<std::vector<int>> get_interpolant_clauses(std::shared_ptr<Proofnode>& rootnode, const std::vector<int>& shared_variables, int auxiliary_variable_start, bool rewrite_aig);
+  std::shared_ptr<Proofnode> get_proofnode(uint64_t id);
+  void construct_aig(std::shared_ptr<Proofnode>& rootnode, const std::vector<int>& shared_variables);
+  void process_node(const std::shared_ptr<Proofnode>& proofnode);
 
   std::vector<uint64_t> reason;
   std::vector<bool> is_assigned;
   std::vector<bool> variable_seen;
   std::unordered_map<uint64_t, bool> id_in_first_part;
   std::unordered_set<int> first_part_variables_set;
-  std::unordered_set<int> shared_variables_set;
   std::vector<int> last_assumptions;
   std::vector<int> trail;
   std::vector<uint64_t> to_delete;
   Cadical solver;
 
-  // For managing AIGs.
-  std::unordered_map<uint64_t, abc::Aig_Obj_t*> id_to_aig_node;
-  std::unordered_map<int, abc::Aig_Obj_t*> shared_variable_to_ci;
+  std::unordered_map<uint64_t, std::shared_ptr<Proofnode>> clause_id_to_proofnode;
+
+  std::unordered_map<std::shared_ptr<Proofnode>,abc::Aig_Obj_t*> proofnode_to_aig_node;
+  std::unordered_map<int, abc::Aig_Obj_t*> variable_to_ci;
+  std::unordered_set<int> shared_variables_set;
   abc::Aig_Man_t * aig_man;
 };
 

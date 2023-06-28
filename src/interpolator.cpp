@@ -11,7 +11,7 @@ using namespace abc; // Needed for macro expansion.
 
 namespace cadical_itp {
 
-Interpolator::Interpolator() {
+Interpolator::Interpolator(): aig_man(nullptr) {
   abc::Dar_LibStart();
 }
 
@@ -52,7 +52,7 @@ std::vector<uint64_t> Interpolator::get_core() const {
       continue;
     }
     seen.insert(id);
-    if (!solver.is_initial_clause(id)) {
+    if (!solver.is_initial_clause(id) && !clause_id_to_proofnode.contains(id)) {
       core.push_back(id);
       for (auto premise_id: solver.get_premises(id)) {
         assert(premise_id < id);
@@ -63,10 +63,10 @@ std::vector<uint64_t> Interpolator::get_core() const {
   return core;
 }
 
-std::pair<std::vector<int>, abc::Aig_Obj_t*>  Interpolator::analyze_and_interpolate(uint64_t id) {
+std::pair<std::vector<int>, std::shared_ptr<Proofnode>> Interpolator::analyze_and_interpolate(uint64_t id) {
   std::vector<int> derived_clause;
   std::vector<int> variables_seen_vector;
-  abc::Aig_Obj_t * interpolant_aig_node = get_aig_node(id);
+  std::shared_ptr<Proofnode> interpolant_proofnode = get_proofnode(id);
   std::string interpolant_string = std::to_string(id);
   int abs_pivot = 0;
   while (id) {
@@ -90,13 +90,8 @@ std::pair<std::vector<int>, abc::Aig_Obj_t*>  Interpolator::analyze_and_interpol
       if (variable_seen[abs_pivot]) {
         const auto& r = reason[abs_pivot];
         if (r) {
-          auto reason_aig_node = get_aig_node(r);
-          if (first_part_variables_set.contains(abs_pivot) && !shared_variables_set.contains(abs_pivot)) {
-            // This is a variable that is only in the first part.
-            interpolant_aig_node = abc::Aig_Or(aig_man, interpolant_aig_node, reason_aig_node);
-          } else {
-            interpolant_aig_node = abc::Aig_And(aig_man, interpolant_aig_node, reason_aig_node);
-          }
+          auto reason_proofnode = get_proofnode(r);
+          interpolant_proofnode = std::make_shared<Proofnode>(abs_pivot, interpolant_proofnode, reason_proofnode);
           id = r;
           break;
         }
@@ -107,7 +102,7 @@ std::pair<std::vector<int>, abc::Aig_Obj_t*>  Interpolator::analyze_and_interpol
   for (auto v: variables_seen_vector) {
     variable_seen[v] = false;
   }
-  return std::make_pair(derived_clause, interpolant_aig_node);
+  return std::make_pair(derived_clause, interpolant_proofnode);
 }
 
 void Interpolator::replay_proof(std::vector<uint64_t>& core) {
@@ -115,10 +110,10 @@ void Interpolator::replay_proof(std::vector<uint64_t>& core) {
   for (auto id: core) {
     auto conflict_id = propagate(id);
     assert(conflict_id > 0);
-    auto [derived_clause, id_interpolant] = analyze_and_interpolate(conflict_id);
+    auto [derived_clause, proofnode_interpolant] = analyze_and_interpolate(conflict_id);
     //std::cerr << ":" << id << std::endl;
     assert(contains(derived_clause, solver.get_clause(id)));
-    id_to_aig_node[id] = id_interpolant;
+    clause_id_to_proofnode[id] = proofnode_interpolant;
   }
 }
 
@@ -159,54 +154,47 @@ uint64_t Interpolator::propagate(uint64_t id) {
   return 0;
 }
 
-
 void Interpolator::delete_clauses() {
-  to_delete.clear();
+  for (auto id: solver.get_delete_ids()) {
+    clause_id_to_proofnode.erase(id);
+  }
+  solver.clear_delete_ids();
 }
 
-abc::Aig_Obj_t* Interpolator::get_aig_node(uint64_t id) {
-  if (id_to_aig_node.contains(id)) {
-    return id_to_aig_node.at(id);
+std::shared_ptr<Proofnode> Interpolator::get_proofnode(uint64_t id) {
+  if (clause_id_to_proofnode.contains(id)) {
+    return clause_id_to_proofnode.at(id);
   }
-  // If there is no AIG node for this id, it has to be an original clause.
+  // If there is no Proofnode for this id, it has to be an original clause.
   assert(solver.is_initial_clause(id));
   assert(id_in_first_part.contains(id));
   if (id_in_first_part.at(id)) {
     auto& clause = solver.get_clause(id);
-    // Create an AIG node for the shared clause.
-    auto aig_output = abc::Aig_ManConst0(aig_man);
-    
+    // Create a Proofnode representing the clause.
+    std::shared_ptr<Proofnode> clause_output = nullptr;
     for (auto l: clause) {
-      auto v = abs(l);
-      if (shared_variable_to_ci.contains(v)) {
-        //std::cerr << l << " ";
-        aig_output = abc::Aig_Or(aig_man, aig_output, abc::Aig_NotCond(shared_variable_to_ci.at(v), l < 0));
-      }
+      auto literal_node = std::make_shared<Proofnode>(l, nullptr, nullptr);
+      clause_output = std::make_shared<Proofnode>(0, clause_output, literal_node);
     }
-    id_to_aig_node[id] = aig_output;
+    clause_id_to_proofnode[id] = clause_output;
   } else {
     // If it is in the second part, return a constant 1 node.
-    id_to_aig_node[id] = abc::Aig_ManConst1(aig_man);
-    //std::cerr << "constant 1";
+    clause_id_to_proofnode[id] = std::make_shared<Proofnode>(0, nullptr, nullptr);
   }
-  //std::cerr << std::endl;
-  return id_to_aig_node.at(id);
+  return clause_id_to_proofnode.at(id);
 }
 
-void Interpolator::set_shared_variables(const std::vector<int>& shared_variables) {
-  shared_variables_set.clear();
-  shared_variables_set.insert(shared_variables.begin(), shared_variables.end());
-  shared_variable_to_ci.clear();
-  id_to_aig_node.clear();
-  // Create inputs for shared variables and mapping of variables to AIG input nodes.
-  for (auto v: shared_variables) {
-    shared_variable_to_ci[v] = abc::Aig_ObjCreateCi(aig_man);
+std::vector<std::vector<int>> Interpolator::get_interpolant_clauses(std::shared_ptr<Proofnode>& rootnode, const std::vector<int>& shared_variables, int auxiliary_variable_start, bool rewrite_aig) {
+  // Create an AIG manager.
+  aig_man = abc::Aig_ManStart(shared_variables.size());
+  construct_aig(rootnode, shared_variables);
+  if (abc::Aig_ManNodeNum(aig_man) > 0 && rewrite_aig) {
+    std::cout << "Number of nodes before: " << Aig_ManNodeNum(aig_man) << std::endl;
+    aig_man = Dar_ManRewriteDefault(aig_man);
+    std::cout << "Number of nodes after: " << Aig_ManNodeNum(aig_man) << std::endl;
   }
-}
-
-std::vector<std::vector<int>> Interpolator::get_interpolant_clauses(const std::vector<int>& shared_variables, int auxiliary_variable_start) {
   std::vector<std::vector<int>> interpolant_clauses;
-  interpolant_clauses.reserve(id_to_aig_node.size());
+  /* interpolant_clauses.reserve(id_to_aig_node.size());
   abc::Vec_Ptr_t * vNodes;
   abc::Aig_Obj_t * pObj, * pConst1 = NULL;
   int i;
@@ -252,26 +240,110 @@ std::vector<std::vector<int>> Interpolator::get_interpolant_clauses(const std::v
     interpolant_clauses.push_back( { -variable_output, literal_input0 } );
     interpolant_clauses.push_back( { variable_output, -literal_input0 } );
   }
-  abc::Vec_PtrFree( vNodes );
+  abc::Vec_PtrFree( vNodes ); */
+  abc::Aig_ManStop(aig_man);
   return interpolant_clauses;
 }
 
+void Interpolator::process_node(const std::shared_ptr<Proofnode>& proofnode) {
+  // The node must not have been processed.
+  assert(!proofnode_to_aig_node.contains(proofnode));
+  if (proofnode->left == nullptr && proofnode->right == nullptr) {
+    // Leaf node: constant or CI.
+    if (proofnode->label) {
+      auto variable = abs(proofnode->label);
+      if (shared_variables_set.contains(variable)) {
+        // If the variable is shared and no CI has been created, create a CI node.
+        if (!variable_to_ci.contains(variable)) {
+          variable_to_ci[variable] = abc::Aig_ObjCreateCi(aig_man);
+        }
+        auto variable_node = variable_to_ci.at(variable);
+        // Negate variable if necessary.
+        auto aig_node = abc::Aig_NotCond(variable_node, proofnode->label < 0);
+        proofnode_to_aig_node[proofnode] = aig_node;
+      } else {
+        proofnode_to_aig_node[proofnode] = abc::Aig_ManConst0(aig_man);
+      }
+    } else { // Label 0 means constant 1.
+      proofnode_to_aig_node[proofnode] = abc::Aig_ManConst1(aig_man);
+    }
+  } else if (proofnode->left == nullptr) {
+    // Copy the object obtained from the right node.
+    assert(proofnode_to_aig_node.contains(proofnode->right));
+    proofnode_to_aig_node[proofnode] = proofnode_to_aig_node.at(proofnode->right);
+  } else if (proofnode->right == nullptr) {
+    // This ought not to occur.
+    assert(false);
+  } else {
+    // Both left and right nodes are present.
+    auto left_node = proofnode_to_aig_node.at(proofnode->left);
+    auto right_node = proofnode_to_aig_node.at(proofnode->right);
+    if (proofnode->label && (shared_variables_set.contains(proofnode->label) || (!first_part_variables_set.contains(proofnode->label)))) {
+      // If the variables NOT local to the first part, create an AND node.
+      proofnode_to_aig_node[proofnode] = abc::Aig_And(aig_man, left_node, right_node);
+    } else {
+      // Otherwise, create an OR node.
+      proofnode_to_aig_node[proofnode] = abc::Aig_Or(aig_man, left_node, right_node);
+    }
+  }
+  // std::cout << "Label: " << proofnode->label << std::endl;
+  // abc::Aig_ObjPrint(aig_man, proofnode_to_aig_node.at(proofnode));
+  // std::cout << std::endl;
+}
+
+void Interpolator::construct_aig(std::shared_ptr<Proofnode>& rootnode, const std::vector<int>& shared_variables) {
+  // Reset AIG-related data structures.
+  proofnode_to_aig_node.clear();
+  variable_to_ci.clear();
+  shared_variables_set.clear();
+  shared_variables_set.insert(shared_variables.begin(), shared_variables.end());
+
+  assert(rootnode != nullptr);
+
+  std::vector<std::shared_ptr<Proofnode>> stack;
+  std::vector<std::shared_ptr<Proofnode>> processed_nodes;
+  stack.push_back(rootnode);
+
+  while (!stack.empty()) {
+    auto node = stack.back();
+    stack.pop_back();
+
+    if (node->flag) {
+      // If the node has already been processed, skip it.
+      continue;
+    }
+
+    if ((node->left && !node->left->flag) || (node->right && !node->right->flag)) {
+      // If any of the child nodes are not processed, push this node back into the stack.
+      stack.push_back(node);
+      // Push unprocessed child nodes into the stack.
+      if (node->right && !node->right->flag) {
+        stack.push_back(node->right);
+      }
+      if (node->left && !node->left->flag) {
+        stack.push_back(node->left);
+      }
+    } else {
+      // If both child nodes are processed (or don't exist), we can process this node.
+      process_node(node);
+      processed_nodes.push_back(node);
+      node->flag = true;
+    }
+  }
+  // Reset flags.
+  for (auto node : processed_nodes) {
+    node->flag = false;
+  }
+  // Create PO.
+  abc::Aig_ObjCreateCo(aig_man, proofnode_to_aig_node.at(rootnode) );
+}
+
 std::pair<int, std::vector<std::vector<int>>> Interpolator::get_interpolant(const std::vector<int>& shared_variables, int auxiliary_variable_start, bool rewrite_aig) {
-  //delete_clauses();
+  delete_clauses();
   solver.get_failed(last_assumptions); // Needed to generate final part of LRAT proof.
   auto core = get_core();
-  //std::cerr << "Core size: " << core.size() << std::endl;
-  aig_man = abc::Aig_ManStart(core.size());
-  set_shared_variables(shared_variables);
   replay_proof(core);
-  abc::Aig_ObjCreateCo(aig_man, id_to_aig_node.at(core.back()));
-  //std::cout << "Last in core:" << core.back() << " last clause solver " << solver.get_current_clause_id() << std::endl;
-  //std::cout << "Number of nodes before: " << Aig_ManNodeNum(aig_man) << std::endl;
-  if (rewrite_aig)
-    aig_man = Dar_ManRewriteDefault(aig_man);
-  //std::cout << "Number of nodes after: " << Aig_ManNodeNum(aig_man) << std::endl;
-  auto interpolant_clauses = get_interpolant_clauses(shared_variables, auxiliary_variable_start);
-  abc::Aig_ManStop(aig_man);
+  auto interpolant_clauses = get_interpolant_clauses(clause_id_to_proofnode.at(core.back()), shared_variables, auxiliary_variable_start, rewrite_aig);
   return std::make_pair(auxiliary_variable_start, interpolant_clauses);
 }
 
