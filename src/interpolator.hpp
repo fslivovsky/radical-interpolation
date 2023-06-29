@@ -62,6 +62,7 @@ class Interpolator {
   std::unordered_map<std::shared_ptr<Proofnode>,abc::Aig_Obj_t*> proofnode_to_aig_node;
   std::unordered_map<int, abc::Aig_Obj_t*> variable_to_ci;
   std::unordered_set<int> shared_variables_set;
+  std::vector<int> aig_input_variables;
   abc::Aig_Man_t * aig_man;
 };
 

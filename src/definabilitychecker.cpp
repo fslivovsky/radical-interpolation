@@ -66,7 +66,7 @@ void Definabilitychecker::append_formula(const std::vector<std::vector<int>>& fo
   }
 }
 
-std::vector<std::vector<int>> Definabilitychecker::get_definition(int variable, const std::vector<int>& shared_variables) {
+std::pair<std::vector<std::vector<int>>, int> Definabilitychecker::get_definition(int variable, const std::vector<int>& shared_variables) {
   assert(variable > 0);
   std::vector<int> assumptions;
   for (auto v: shared_variables) {
@@ -82,7 +82,7 @@ std::vector<std::vector<int>> Definabilitychecker::get_definition(int variable, 
   assumptions.push_back(1);
   bool has_definition = !interpolator.solve(assumptions);
   if (!has_definition) {
-    return {};
+    return std::make_pair(std::vector<std::vector<int>>{}, 0);
   }
   auto [output_variable, definition] = interpolator.get_interpolant(translate_clause(shared_variables, true), 5 * equality_selector.size(), false);
   for (auto& clause: definition) {
@@ -90,6 +90,6 @@ std::vector<std::vector<int>> Definabilitychecker::get_definition(int variable, 
   }
   definition.push_back({ output_variable, -variable});
   definition.push_back({-output_variable,  variable});
-  return definition;
+  return std::make_pair(definition, 5 * equality_selector.size());
 }
 

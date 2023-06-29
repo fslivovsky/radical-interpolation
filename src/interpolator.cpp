@@ -111,7 +111,6 @@ void Interpolator::replay_proof(std::vector<uint64_t>& core) {
     auto conflict_id = propagate(id);
     assert(conflict_id > 0);
     auto [derived_clause, proofnode_interpolant] = analyze_and_interpolate(conflict_id);
-    //std::cerr << ":" << id << std::endl;
     assert(contains(derived_clause, solver.get_clause(id)));
     clause_id_to_proofnode[id] = proofnode_interpolant;
   }
@@ -206,7 +205,7 @@ std::vector<std::vector<int>> Interpolator::get_interpolant_clauses(std::shared_
   }
   // Assign shared variables to CIs.
   Aig_ManForEachCi( aig_man, pObj, i) {
-    pObj->iData = shared_variables[i];
+    pObj->iData = aig_input_variables[i];
   }
   // collect nodes in the DFS order
   vNodes = abc::Aig_ManDfs(aig_man, 1);
@@ -255,6 +254,7 @@ void Interpolator::process_node(const std::shared_ptr<Proofnode>& proofnode) {
       if (shared_variables_set.contains(variable)) {
         // If the variable is shared and no CI has been created, create a CI node.
         if (!variable_to_ci.contains(variable)) {
+          aig_input_variables.push_back(variable);
           variable_to_ci[variable] = abc::Aig_ObjCreateCi(aig_man);
         }
         auto variable_node = variable_to_ci.at(variable);
@@ -295,6 +295,7 @@ void Interpolator::construct_aig(std::shared_ptr<Proofnode>& rootnode, const std
   // Reset AIG-related data structures.
   proofnode_to_aig_node.clear();
   variable_to_ci.clear();
+  aig_input_variables.clear();
   shared_variables_set.clear();
   shared_variables_set.insert(shared_variables.begin(), shared_variables.end());
 
@@ -342,6 +343,10 @@ std::pair<int, std::vector<std::vector<int>>> Interpolator::get_interpolant(cons
   delete_clauses();
   solver.get_failed(last_assumptions); // Needed to generate final part of LRAT proof.
   auto core = get_core();
+  if (core.empty()) {
+    // If the core is empty, the formula is unsatisfiable. In this case, we return a trivial interpolant.
+    return std::make_pair(auxiliary_variable_start, std::vector<std::vector<int>>{{-auxiliary_variable_start}});
+  }
   replay_proof(core);
   auto interpolant_clauses = get_interpolant_clauses(clause_id_to_proofnode.at(core.back()), shared_variables, auxiliary_variable_start, rewrite_aig);
   return std::make_pair(auxiliary_variable_start, interpolant_clauses);

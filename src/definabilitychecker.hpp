@@ -4,12 +4,13 @@
 #include "interpolator.hpp"
 
 #include <vector>
+#include <utility>
 
 class Definabilitychecker {
  public:
   void add_clause(const std::vector<int>& clause);
   void append_formula(const std::vector<std::vector<int>>& formula);
-  std::vector<std::vector<int>> get_definition(int variable, const std::vector<int>& shared_variables);
+  std::pair<std::vector<std::vector<int>>, int> get_definition(int variable, const std::vector<int>& shared_variables);
 
  protected:
   void add_variable(int variable);

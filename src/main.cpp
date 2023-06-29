@@ -42,7 +42,7 @@ int main(int argc, char** argv) {
       auto v = variables[i];
       if (is_existential[i]) {
         nr_existential++;
-        auto definition = checker.get_definition(v, defining_variables);
+        auto [definition, auxiliary_var_start] = checker.get_definition(v, defining_variables);
         if (!definition.empty()) {
           nr_defined++;
         }
