@@ -2,6 +2,8 @@
 
 #include <cassert>
 
+Definabilitychecker::Definabilitychecker() : state(State::UNDEFINED) {}
+
 void Definabilitychecker::add_variable(int variable) {
   assert(variable > 0);
   while (variable >= equality_selector.size()) {
@@ -50,6 +52,7 @@ void Definabilitychecker::original_clause(std::vector<int>& translated_clause) {
 }
 
 void Definabilitychecker::add_clause(const std::vector<int>& clause) {
+  state = State::UNDEFINED;
   for (auto l: clause) {
     auto v = abs(l);
     if (v >= equality_selector.size() or equality_selector[v] == 0) {
@@ -66,30 +69,45 @@ void Definabilitychecker::append_formula(const std::vector<std::vector<int>>& fo
   }
 }
 
-std::pair<std::vector<std::vector<int>>, int> Definabilitychecker::get_definition(int variable, const std::vector<int>& shared_variables) {
+bool Definabilitychecker::has_definition(int variable, const std::vector<int>& shared_variables, const std::vector<int>& assumptions) {
   assert(variable > 0);
-  std::vector<int> assumptions;
+  state = State::UNDEFINED;
+  std::vector<int> assumptions_internal;
   for (auto v: shared_variables) {
     if (v >= equality_selector.size() or equality_selector[v] == 0) {
       add_variable(v);
     }
-    assumptions.push_back(equality_selector[v]);
+    assumptions_internal.push_back(equality_selector[v]);
   }
   auto true_selector = 5 * variable + 3;
   auto false_selector = 5 * variable + 4;
-  assumptions.push_back(true_selector);
-  assumptions.push_back(false_selector);
-  assumptions.push_back(1);
-  bool has_definition = !interpolator.solve(assumptions);
-  if (!has_definition) {
-    return std::make_pair(std::vector<std::vector<int>>{}, 0);
+  // Translate external assumptions.
+  auto assumptions_first_part = translate_clause(assumptions, true);
+  assumptions_internal.insert(assumptions_internal.end(), assumptions_first_part.begin(), assumptions_first_part.end());
+  std::vector<int> assumptions_second_part = translate_clause(assumptions, false);
+  assumptions_internal.insert(assumptions_internal.end(), assumptions_second_part.begin(), assumptions_second_part.end());
+  assumptions_internal.push_back(true_selector);
+  assumptions_internal.push_back(false_selector);
+  assumptions_internal.push_back(1);
+  bool has_definition = !interpolator.solve(assumptions_internal);
+  if (has_definition) {
+    state = State::DEFINED;
+    last_shared_variables = shared_variables;
+    last_variable = variable;
   }
-  auto [output_variable, definition] = interpolator.get_interpolant(translate_clause(shared_variables, true), 5 * equality_selector.size(), false);
+  return has_definition;
+}
+
+std::pair<std::vector<std::vector<int>>, int> Definabilitychecker::get_definition(bool rewrite) {
+  if (state != State::DEFINED) {
+    throw UndefinedException();
+  }
+  auto [output_variable, definition] = interpolator.get_interpolant(translate_clause(last_shared_variables, true), 5 * equality_selector.size(), false);
   for (auto& clause: definition) {
     original_clause(clause);
   }
-  definition.push_back({ output_variable, -variable});
-  definition.push_back({-output_variable,  variable});
+  definition.push_back({ output_variable, -last_variable});
+  definition.push_back({-output_variable,  last_variable});
   return std::make_pair(definition, 5 * equality_selector.size());
 }
 
