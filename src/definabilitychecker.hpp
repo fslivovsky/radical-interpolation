@@ -10,7 +10,7 @@
 class UndefinedException : public std::exception {
  public:
   const char* what() const noexcept override {
-    return "can only call get_definition in DEFINED state";
+    return "can only call get_definition in DEFINED state (once)";
   }
 };
 

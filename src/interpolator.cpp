@@ -11,7 +11,7 @@ using namespace abc; // Needed for macro expansion.
 
 namespace cadical_itp {
 
-Interpolator::Interpolator(): aig_man(nullptr) {
+Interpolator::Interpolator(): state(State::UNDEFINED), aig_man(nullptr) {
   abc::Dar_LibStart();
 }
 
@@ -20,6 +20,7 @@ Interpolator::~Interpolator() {
 }
 
 void Interpolator::add_clause(const std::vector<int>& clause, bool first_part) {
+  state = State::UNDEFINED;
   auto id = solver.get_current_clause_id() + 1;
   solver.add_clause(clause);
   id_in_first_part[id] = first_part;
@@ -340,7 +341,11 @@ void Interpolator::construct_aig(std::shared_ptr<Proofnode>& rootnode, const std
 }
 
 std::pair<int, std::vector<std::vector<int>>> Interpolator::get_interpolant(const std::vector<int>& shared_variables, int auxiliary_variable_start, bool rewrite_aig) {
+  if (state != State::UNSAT) {
+    throw InterpolatorStateException("can only call get_interpolant in UNSAT state");
+  }
   delete_clauses();
+  state = State::UNDEFINED;
   solver.get_failed(last_assumptions); // Needed to generate final part of LRAT proof.
   auto core = get_core();
   if (core.empty()) {

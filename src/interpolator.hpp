@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <fstream>
 #include <memory>
+#include <string>
 
 #include "aig/aig/aig.h"
 
@@ -35,7 +36,27 @@ class Interpolator {
   std::vector<int> get_values(const std::vector<int>& variables);
   std::pair<int, std::vector<std::vector<int>>> get_interpolant(const std::vector<int>& shared_variables, int auxiliary_variable_start, bool rewrite_aig);
 
+  // Exception class to throw when interpolator is not in the correct state.
+  class InterpolatorStateException : public std::exception {
+   public:
+    explicit InterpolatorStateException(const std::string& message) : message(message) {}
+    const char* what() const noexcept override {
+      return message.c_str();
+    }
+   private:
+    std::string message;
+  };
+
  protected:
+  
+  enum class State {
+    UNDEFINED,
+    SAT,
+    UNSAT
+  };
+
+  State state;
+
   std::vector<int> get_clause(uint64_t id) const;
   std::vector<uint64_t> get_core() const;
   void replay_proof(std::vector<uint64_t>& core);
@@ -75,14 +96,28 @@ inline void Interpolator::append_formula(const std::vector<std::vector<int>>& fo
 
 inline bool Interpolator::solve(const std::vector<int>& assumptions) {
   last_assumptions = assumptions;
-  return solver.solve(assumptions) != 20;
+  auto result = solver.solve(assumptions);
+  if (result == 10) {
+    state = State::SAT;
+  } else if (result == 20) {
+    state = State::UNSAT;
+  } else {
+    throw InterpolatorStateException("unexpected result from solver");
+  }
+  return result != 20;
 }
 
 inline std::vector<int> Interpolator::get_model() {
+  if (state != State::SAT) {
+    throw InterpolatorStateException("can only call get_model in SAT state");
+  }
   return solver.get_model();
 }
 
 inline std::vector<int> Interpolator::get_values(const std::vector<int>& variables) {
+  if (state != State::SAT) {
+    throw InterpolatorStateException("can only call get_model in SAT state");
+  }
   return solver.get_values(variables);
 }
 

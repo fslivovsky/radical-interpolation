@@ -102,6 +102,7 @@ std::pair<std::vector<std::vector<int>>, int> Definabilitychecker::get_definitio
   if (state != State::DEFINED) {
     throw UndefinedException();
   }
+  state = State::UNDEFINED; // Can we make sure that repeated calls of get_definition are safe?
   auto [output_variable, definition] = interpolator.get_interpolant(translate_clause(last_shared_variables, true), 5 * equality_selector.size(), false);
   for (auto& clause: definition) {
     original_clause(clause);
