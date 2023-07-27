@@ -13,6 +13,7 @@ Cadical::Cadical() {
   solver.connect_terminator(&terminator);
   solver.set("lrat", true);
   solver.set("inprocessing", false);
+  solver.set("log", true); // For debugging only.
   solver.trace_proof();
 }
 
