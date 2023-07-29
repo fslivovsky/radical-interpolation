@@ -188,6 +188,7 @@ std::vector<std::vector<int>> Interpolator::get_interpolant_clauses(std::shared_
   // Create an AIG manager.
   aig_man = abc::Aig_ManStart(shared_variables.size());
   construct_aig(rootnode, shared_variables);
+  Aig_ManCleanup(aig_man);
   if (abc::Aig_ManNodeNum(aig_man) > 0 && rewrite_aig) {
     std::cout << "Number of nodes before: " << Aig_ManNodeNum(aig_man) << std::endl;
     aig_man = Dar_ManRewriteDefault(aig_man);
