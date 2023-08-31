@@ -44,12 +44,13 @@ int main(int argc, char** argv) {
         nr_existential++;
         if (checker.has_definition(v, defining_variables, {})) {
           nr_defined++;
+          checker.get_definition(false);
         }
-        checker.get_definition(false);
       }
       defining_variables.push_back(v);
     }
-    std::cout << "Number of defined variables: " << nr_defined << "/" << nr_existential << std::endl;
+    std::cout << std::endl;
+    std::cout << "Number of defined existential variables: " << nr_defined << "/" << nr_existential << std::endl;
   }
   catch (FileDoesNotExistException& e) {
     std::cout << e.what() << std::endl;

@@ -15,10 +15,10 @@ target_include_directories(interpolator PRIVATE ${CMAKE_SOURCE_DIR}/abc/src/abc/
 add_library(definabilitychecker definabilitychecker.cpp definabilitychecker.hpp)
 target_link_libraries(definabilitychecker interpolator)
 
-add_executable(test main.cpp qdimacs.hpp)
-target_link_libraries(test definabilitychecker libabc-pic)
-target_include_directories(test PRIVATE ${CMAKE_SOURCE_DIR}/abc/src/abc/)
+add_executable(get_definitions main.cpp qdimacs.hpp)
+target_link_libraries(get_definitions definabilitychecker libabc-pic)
+target_include_directories(get_definitions PRIVATE ${CMAKE_SOURCE_DIR}/abc/src/abc/)
 
-set_target_properties(test PROPERTIES
+set_target_properties(get_definitions PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
 )
