@@ -11,11 +11,9 @@ target_link_libraries(cadical_solver PUBLIC ${CMAKE_SOURCE_DIR}/radical/build/li
 add_library(interpolator interpolator.cpp interpolator.hpp)
 target_link_libraries(interpolator cadical_solver libabc-pic)
 target_include_directories(interpolator PRIVATE ${CMAKE_SOURCE_DIR}/abc/src/abc/)
-set_property(TARGET interpolator PROPERTY CXX_STANDARD 20)
 
 add_library(definabilitychecker definabilitychecker.cpp definabilitychecker.hpp)
 target_link_libraries(definabilitychecker interpolator)
-set_property(TARGET definabilitychecker PROPERTY CXX_STANDARD 20)
 
 add_executable(get_definitions main.cpp qdimacs.hpp)
 target_link_libraries(get_definitions definabilitychecker libabc-pic)

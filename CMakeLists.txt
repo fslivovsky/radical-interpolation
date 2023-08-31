@@ -22,6 +22,7 @@ add_subdirectory(abc EXCLUDE_FROM_ALL)
 
 # Set the C++ Standard to C++20.
 set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 add_subdirectory(src)
