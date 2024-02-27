@@ -5,7 +5,7 @@
 
 #include <iostream>
 
-namespace cadical_itp {
+namespace cadical_annotations {
 
 Cadical::CadicalTerminator Cadical::terminator;
 

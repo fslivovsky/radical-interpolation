@@ -1,12 +1,12 @@
-#ifndef ITP_CADICAL_H_
-#define ITP_CADICAL_H_
+#ifndef ANN_CADICAL_H_
+#define ANN_CADICAL_H_
 
 #include <vector>
 #include <cstdio>
 
 #include "cadical.hpp"
 
-namespace cadical_itp {
+namespace cadical_annotations {
 
 class Cadical {
  public:
@@ -73,4 +73,4 @@ inline void Cadical::clear_delete_ids() {
 
 }
 
-#endif // ITP_CADICAL_H_
+#endif // ANN_CADICAL_H_

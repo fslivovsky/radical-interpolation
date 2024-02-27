@@ -1,6 +1,6 @@
 #include "interrupt.hpp"
 
-namespace cadical_itp {
+namespace cadical_annotations {
 
 int InterruptHandler::signal_received = 0;
 

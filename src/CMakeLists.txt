@@ -1,24 +1,19 @@
 cmake_minimum_required(VERSION 3.10)
 
-add_library(interrupt interrupt.cpp interrupt.hpp)
+add_library(interrupt_ann interrupt.cpp interrupt.hpp)
 
-add_library(cadical_solver cadical_solver.cpp cadical_solver.hpp)
-target_include_directories(cadical_solver PUBLIC ${CMAKE_SOURCE_DIR}/radical/src/)
-add_dependencies(cadical_solver radical)
+add_library(cadical_solver_ann cadical_solver.cpp cadical_solver.hpp)
+target_include_directories(cadical_solver_ann PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../radical/src/)
+add_dependencies(cadical_solver_ann radical)
 
-target_link_libraries(cadical_solver PUBLIC ${CMAKE_SOURCE_DIR}/radical/build/libcadical.a interrupt)
+target_link_libraries(cadical_solver_ann PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../radical/build/libcadical.a interrupt_ann)
 
-add_library(interpolator interpolator.cpp interpolator.hpp)
-target_link_libraries(interpolator cadical_solver libabc-pic)
-target_include_directories(interpolator PRIVATE ${CMAKE_SOURCE_DIR}/abc/src/abc/)
+add_library(annotatingsolver annotatingsolver.cpp annotatingsolver.hpp)
+target_link_libraries(annotatingsolver PRIVATE cadical_solver_ann)
 
-add_library(definabilitychecker definabilitychecker.cpp definabilitychecker.hpp)
-target_link_libraries(definabilitychecker interpolator)
+#add_executable(test test.cpp)
+#target_link_libraries(test annotatingsolver)
 
-add_executable(get_definitions main.cpp qdimacs.hpp)
-target_link_libraries(get_definitions definabilitychecker libabc-pic)
-target_include_directories(get_definitions PRIVATE ${CMAKE_SOURCE_DIR}/abc/src/abc/)
-
-set_target_properties(get_definitions PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
-)
+#set_target_properties(test PROPERTIES
+#    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+#)
