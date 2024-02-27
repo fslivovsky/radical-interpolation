@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 
-project(Cadical-Interpolate)
+project(Radical-Annotations)
 
 find_package(Boost 1.7 REQUIRED)
 
@@ -21,6 +21,7 @@ if(NOT TARGET radical)
         INSTALL_COMMAND ""
         BUILD_IN_SOURCE 1
     )
+    set(LIBRADICAL_PATH "${PROJECT_SOURCE_DIR}/radical/build/libcadical.a")
 endif()
 
 
