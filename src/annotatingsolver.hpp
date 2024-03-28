@@ -81,9 +81,9 @@ class Annotatingsolver {
   bool solve(const std::vector<int>& assumptions);
   std::vector<int> get_model();
   std::vector<int> get_values(const std::vector<int>& variables);
-  std::vector<ConflictPair> get_annotation_conflicts();
+  std::pair<std::vector<int>, std::vector<ConflictPair>> get_annotation_conflicts();
 
-  // Exception class to throw when interpolator is not in the correct state.
+  // Exception class to throw when solver is not in the correct state.
   class SolverStateException : public std::exception {
    public:
     explicit SolverStateException(const std::string& message) : message(message) {}
@@ -136,6 +136,7 @@ class Annotatingsolver {
   std::unordered_map<int, int> annotation_index_to_variable;
   std::unordered_map<int, int> variable_to_annotation_index;
   std::unordered_map<uint64_t, std::vector<ConflictPair>> clause_id_to_annotation_conflicts;
+  std::vector<int> annotation_core;
 
   bool empty_added;
 };

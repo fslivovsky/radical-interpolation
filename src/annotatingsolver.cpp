@@ -90,7 +90,7 @@ std::vector<int> Annotatingsolver::get_values(const std::vector<int>& variables)
   return solver->get_values(variables);
 }
 
-std::vector<std::pair<int, std::vector<int>>> Annotatingsolver::get_annotation_conflicts() {
+std::pair<std::vector<int>, std::vector<ConflictPair>> Annotatingsolver::get_annotation_conflicts() {
   if (state != State::UNSAT) {
     throw SolverStateException("can only call get_annotation_conflicts in UNSAT state");
   }
@@ -99,12 +99,12 @@ std::vector<std::pair<int, std::vector<int>>> Annotatingsolver::get_annotation_c
   auto core = get_core();
   if (core.empty()) {
     // This should only happen if the empty clause is added.
-    return {};
+    return {{}, {}};
   }
   replay_proof(core);
   auto conflicts = clause_id_to_annotation_conflicts.at(core.back());
   delete_clauses();
-  return conflicts;
+  return std::make_pair(annotation_core, conflicts);
 }
 
 std::vector<uint64_t> Annotatingsolver::get_core() const {
@@ -161,8 +161,19 @@ std::tuple<std::vector<int>, ClauseAnnotation, std::vector<ConflictPair>> Annota
         //print_annotation_map(clause_id_to_annotation.at(id));
         running_annotation_conflicts = unify_annotations(running_annotation_map, clause_id_to_annotation.at(id));
         running_annotation_map.erase(abs_pivot);
+        // If there is a conflict w.r.t. annotations, identify assumptions in the derived clause.
+        if (!running_annotation_conflicts.empty()) {
+          annotation_core.clear();
+          std::unordered_set<int> assumptions_set(last_assumptions.begin(), last_assumptions.end());
+          for (auto l: derived_clause) {
+            if (assumptions_set.contains(-l)) {
+              annotation_core.push_back(-l);
+            }
+          }
+        }
       }
     }
+    // Search for next pivot.
     id = 0;
     while(!trail.empty()) {
       int pivot = trail.back();
