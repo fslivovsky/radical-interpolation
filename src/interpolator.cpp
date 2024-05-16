@@ -229,17 +229,17 @@ std::vector<std::vector<int>> Interpolator::get_interpolant_clauses(std::shared_
     auto variable_input1 = abc::Aig_ObjFanin1(pObj)->iData;
     auto literal_input0 = Aig_ObjFaninC0(pObj) ? -variable_input0 : variable_input0;
     auto literal_input1 = Aig_ObjFaninC1(pObj) ? -variable_input1 : variable_input1;
-    interpolant_clauses.push_back( { -variable_output, literal_input0 } );
-    interpolant_clauses.push_back( { -variable_output, literal_input1 } );
-    interpolant_clauses.push_back( { variable_output, -literal_input0, -literal_input1 } );
+    interpolant_clauses.push_back( { literal_input0, -variable_output } );
+    interpolant_clauses.push_back( { literal_input1, -variable_output } );
+    interpolant_clauses.push_back( { -literal_input0, -literal_input1, variable_output } );
   }
   // Write clauses for PO.
   Aig_ManForEachCo( aig_man, pObj, i ) {
     auto variable_output = pObj->iData;
     auto variable_input0 = abc::Aig_ObjFanin0(pObj)->iData;
     auto literal_input0 = Aig_ObjFaninC0(pObj) ? -variable_input0 : variable_input0;
-    interpolant_clauses.push_back( { -variable_output, literal_input0 } );
-    interpolant_clauses.push_back( { variable_output, -literal_input0 } );
+    interpolant_clauses.push_back( { literal_input0, -variable_output } );
+    interpolant_clauses.push_back( { -literal_input0, variable_output } );
   }
   abc::Vec_PtrFree( vNodes );
   abc::Aig_ManStop(aig_man);
